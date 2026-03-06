@@ -39,7 +39,7 @@ Examples:
 
 ### Commit Command
 
-!```
+```
 git commit -m "$(cat <<'EOF'
 <one-line short summary>
 
