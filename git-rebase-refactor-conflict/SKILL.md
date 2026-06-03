@@ -8,8 +8,8 @@ description: |
   location that your branch refactored into a different structure. Prevents accidental
   feature loss during rebase conflict resolution.
 author: Claude Code
-version: 1.0.0
-date: 2026-01-22
+version: 1.1.0
+date: 2026-05-26
 ---
 
 # Git Rebase Refactor Conflict Resolution
@@ -29,6 +29,16 @@ new features from master because they appear in the "wrong" location.
 - The conflict markers show a large block from HEAD (master) that looks like old code
 
 ## Solution
+
+0. **Run rebases with non-interactive editors by default**: Avoid opening VS Code,
+   Vim, or another editor while replaying commits. Prefer per-command config so the
+   behavior is scoped to this operation:
+   ```bash
+   git -c core.editor=true -c sequence.editor=true rebase master
+   git -c core.editor=true -c sequence.editor=true rebase --continue
+   ```
+   Use the same pattern for other bases or interactive rebases unless the user
+   explicitly wants to edit the todo list or commit messages.
 
 1. **Before resolving**: Identify what master added by checking recent commits:
    ```bash
@@ -64,22 +74,22 @@ After completing the rebase:
 - `_populate_params_for_api()` - pure param population
 - `_validate_and_remove_invalid_apis()` - validation only
 
-Master added "Feature X" handling to the original `setup_api_params()` location.
+Master added "feature-x" handling to the original `setup_api_params()` location.
 
 **Bad resolution** (loses feature):
 ```
 <<<<<<< HEAD
-    # 200 lines of param population including new Feature X handling
+    # 200 lines of param population including new feature-x handling
 =======
 >>>>>>> your-commit
     # Just validation code
 ```
-Keeping empty (branch's version) loses Feature X.
+Keeping empty (branch's version) loses feature-x.
 
 **Good resolution**:
-1. Note that Feature X handling is NEW in master
+1. Note that feature-x handling is NEW in master
 2. Keep your clean validation-only structure
-3. Add Feature X handling to `_populate_params_for_api()` (the new location for param code)
+3. Add feature-x handling to `_populate_params_for_api()` (the new location for param code)
 
 ## Notes
 
@@ -87,6 +97,8 @@ Keeping empty (branch's version) loses Feature X.
 - The larger the refactored section, the more likely master added something to it
 - Always check `git log` on conflicted files to see what master changed
 - Consider doing a `git diff origin/master...HEAD -- <file>` before rebasing to understand changes
+- Do not change global Git editor config for this. Use `git -c core.editor=true -c sequence.editor=true ...`
+  on the rebase command so future user-driven Git operations keep their normal editor.
 
 ## References
 
