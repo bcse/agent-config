@@ -1,6 +1,8 @@
 #!/bin/sh
-# Version-controlled git pre-commit hook. Installed via core.hooksPath (see
-# scripts/install-pre-commit.sh), not copied into .git/hooks.
+# Version-controlled git pre-commit hook. Enable it with:
+#   chmod +x .githooks/pre-commit
+#   git config --local core.hooksPath .githooks
+# Do not copy this file into .git/hooks.
 #
 # Adapt the checks below to the project's toolchain. Each `run` line is a gate:
 # if a command exits non-zero, `set -e` aborts the commit. Keep checks fast —

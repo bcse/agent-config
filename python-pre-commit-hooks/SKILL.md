@@ -9,7 +9,12 @@ description: Use when a Python project needs a git pre-commit hook that runs lin
 
 Install a **version-controlled** git `pre-commit` hook that runs the project's quality gates (lint, format-check, type-check, tests) before every commit. A failing check aborts the commit.
 
-**Core principle:** Keep the hook *in the repo* under `.githooks/` and point git at it with `core.hooksPath` — never hand-copy scripts into `.git/hooks/` (untracked, drifts per-clone). Every contributor runs one install script and gets the same checks.
+**Core principle:** Keep the hook *in the repo* under `.githooks/` and point git at it with `core.hooksPath` — never hand-copy scripts into `.git/hooks/` (untracked, drifts per-clone). Every contributor can run the same two setup commands after cloning:
+
+```sh
+chmod +x .githooks/pre-commit
+git config --local core.hooksPath .githooks
+```
 
 ## When to Use
 
@@ -20,27 +25,24 @@ Install a **version-controlled** git `pre-commit` hook that runs the project's q
 - The repo already uses the [`pre-commit` framework](https://pre-commit.com/) (`.pre-commit-config.yaml`) — extend that instead.
 - You only need to gate on the server (CI) — use a CI workflow, not a local hook.
 
-## The Pattern (3 pieces)
+## The Pattern (2 pieces)
 
 | File | Role |
 |------|------|
 | `.githooks/pre-commit` | POSIX `sh` script; the actual checks. Tracked in git. |
-| `scripts/install-pre-commit.sh` | Sets `git config --local core.hooksPath .githooks` (idempotent, refuses to clobber a foreign value). |
-| `scripts/uninstall-pre-commit.sh` | Unsets `core.hooksPath` only if it points at this repo's `.githooks`. |
+| README/AGENTS setup note | Documents `chmod +x .githooks/pre-commit` and `git config --local core.hooksPath .githooks` for contributors. |
 
-Ready-to-copy versions live in `assets/` within this skill.
+The ready-to-copy hook lives in `assets/pre-commit` within this skill.
 
 ## Setup Steps
 
 1. **Copy the templates** into the target repo:
    - `assets/pre-commit` → `.githooks/pre-commit`
-   - `assets/install-pre-commit.sh` → `scripts/install-pre-commit.sh`
-   - `assets/uninstall-pre-commit.sh` → `scripts/uninstall-pre-commit.sh`
 2. **Adapt the checks** in `.githooks/pre-commit` to the project's toolchain (see table below). Only keep commands for tools the project actually uses.
-3. **Make them executable:** `chmod +x .githooks/pre-commit scripts/*.sh`
-4. **Install:** `sh scripts/install-pre-commit.sh`
+3. **Make the hook executable:** `chmod +x .githooks/pre-commit`
+4. **Install locally:** `git config --local core.hooksPath .githooks`
 5. **Verify it runs** without committing: `.githooks/pre-commit` (run it directly — it should print each `==>` step and exit 0 on a clean tree).
-6. **Commit** the three files so collaborators can `sh scripts/install-pre-commit.sh` after cloning. Document that one line in the README/AGENTS.md.
+6. **Commit** `.githooks/pre-commit` and document the two setup commands in README/AGENTS.md so collaborators can enable the hook after cloning.
 
 ## Adapting the Checks
 
@@ -63,9 +65,11 @@ Detect what's present before keeping a line: check `pyproject.toml` for `[tool.r
 ## Why `core.hooksPath` (not `.git/hooks/`)
 
 - **Versioned & shared:** the hook lives in the repo; `.git/hooks/` is local-only and never cloned.
-- **One toggle:** install/uninstall flip a single config value instead of copying/deleting files.
-- **No clobber:** the install script refuses to overwrite a `core.hooksPath` that points elsewhere, so it won't fight other tooling.
+- **One local toggle:** setup is a single repo-local config value instead of copied files or wrapper scripts.
+- **Discoverable:** contributors can inspect `.githooks/pre-commit` directly and README shows the exact `git config` command that enables it.
 - Requires Git ≥ 2.9 (standard everywhere today).
+
+If `git config --local --get core.hooksPath` already returns a different value, do not overwrite it silently. Either adapt the existing hook setup or confirm the repo should switch to `.githooks`.
 
 ## Bypassing
 
@@ -75,14 +79,16 @@ For an emergency commit that must skip checks: `SKIP_PRE_COMMIT=1 git commit -m 
 
 - **Copying into `.git/hooks/`** — untracked, drifts, not shared. Use `core.hooksPath`.
 - **`#!/bin/bash` + bashisms** — keep it `#!/bin/sh` POSIX so it runs everywhere; the templates already do.
-- **Forgetting `chmod +x`** — git won't run a non-executable hook. The install script re-applies `chmod +x` defensively.
+- **Forgetting `chmod +x`** — git won't run a non-executable hook. Commit the executable bit and document the command.
+- **Hiding setup in wrapper scripts** — `chmod +x` and `git config --local core.hooksPath .githooks` are simple enough to document directly.
 - **Slow hooks** — a multi-minute test suite makes people bypass the hook. If `pytest` is slow, scope it (e.g. fast subset) and run the full suite in CI.
 - **Leaving checks for tools the repo doesn't have** — every `run` line must be a command that exists, or every commit fails.
 
 ## Verifying It Works
 
 ```sh
-sh scripts/install-pre-commit.sh
+chmod +x .githooks/pre-commit
+git config --local core.hooksPath .githooks
 git config --local --get core.hooksPath     # -> .githooks
 .githooks/pre-commit                         # runs all checks, exits 0 on clean tree
 # Introduce a lint error, then attempt a commit -> it should be blocked.
