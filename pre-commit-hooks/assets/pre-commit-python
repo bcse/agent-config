@@ -1,0 +1,52 @@
+#!/bin/sh
+set -eu
+
+if [ "${SKIP_PRE_COMMIT:-}" = "1" ]; then
+    echo "Skipping pre-commit checks because SKIP_PRE_COMMIT=1"
+    exit 0
+fi
+
+repo_root="$(git rev-parse --show-toplevel)"
+before_diff="$(mktemp "${TMPDIR:-/tmp}/pre-commit-before.XXXXXX")"
+after_diff="$(mktemp "${TMPDIR:-/tmp}/pre-commit-after.XXXXXX")"
+
+cleanup() {
+    rm -f "$before_diff" "$after_diff"
+}
+trap cleanup EXIT INT TERM
+
+run_in() {
+    dir="$1"
+    shift
+    echo
+    echo "==> $dir: $*"
+    (cd "$repo_root/$dir" && "$@")
+}
+
+python_dir="${PYTHON_DIR:-.}"
+
+git -C "$repo_root" diff --binary > "$before_diff"
+
+run_in "$python_dir" ruff check
+run_in "$python_dir" ruff format --check
+
+# Keep exactly one type checker, matching the repo.
+run_in "$python_dir" ty check
+# run_in "$python_dir" mypy .
+# run_in "$python_dir" pyright
+
+run_in "$python_dir" uv run pytest
+# run_in "$python_dir" pytest
+# run_in "$python_dir" python -m pytest
+
+git -C "$repo_root" diff --binary > "$after_diff"
+
+if ! cmp -s "$before_diff" "$after_diff"; then
+    echo
+    echo "Pre-commit checks modified files. Review and stage those changes, then commit again."
+    git -C "$repo_root" diff --name-only
+    exit 1
+fi
+
+echo
+echo "Pre-commit checks passed."
