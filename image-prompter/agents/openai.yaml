@@ -1,0 +1,4 @@
+interface:
+  display_name: "Image Prompter"
+  short_description: "Turn text or images into polished prose prompts"
+  default_prompt: "Use $image-prompter to turn this text or image into one optimized natural-language image prompt."

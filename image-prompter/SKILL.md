@@ -1,88 +1,68 @@
 ---
 name: image-prompter
-description: Use when the user wants a prompt for AI image generation or editing — whether they provide an image or text. Triggers - sharing an image and asking for a prompt that recreates it ("reverse prompt", "image to prompt", "describe this for Midjourney/Flux/SDXL/DALL·E"), asking to optimize, rewrite, critique, or build an image prompt from a rough idea, or needing prompts for image edits, multi-image or reference workflows, text-in-image, localization, product mockups, logos, UI mockups, photorealism, diagrams, character consistency, or model-specific prompting for GPT Image, Gemini, Nano Banana, and similar image models.
+description: Create, rewrite, and optimize natural-language prompts for AI image generation from a text brief, a supplied image, or both. Use when the requested deliverable is prompt text for creating, recreating, editing, compositing, or restyling an image; for reverse prompting; for terse requests such as “what prompt recreates this?”; or when the skill is explicitly invoked with an image and no text. Do not use for direct image generation or editing, ordinary captions or alt text, OCR, visual critique, or identity recognition.
 ---
 
 # Image Prompter
 
 ## Overview
 
-Turn the user's input — a provided image, a rough visual idea, or an existing draft prompt — into one optimized prompt they can paste into an image model. The deliverable is the prompt itself, not an image critique or a prompting lecture.
+Turn visual intent into one paste-ready prose prompt. Treat text optimization and image-guided prompting as the same synthesis task: gather evidence internally, resolve it, and return the optimized prompt without narrating intermediate analysis.
 
-## Routing
+## Critical Output Contract
 
-| Input | Path |
-|---|---|
-| Image (attached or a readable path) + wants to recreate or reproduce it | Stage 1 (describe) → Stage 2 (optimize) |
-| Image + wants to change, edit, or composite it | Stage 2 as an edit prompt; from the image, describe only the invariants to preserve |
-| Text only (idea, draft prompt) | Stage 2 (optimize) |
-| Mentions an image but none is present or readable | Ask for the image. Never invent a subject. |
-| Several images | Ask which one — or for composite/consistency work, assign each image a role |
+Return only the final prompt as plain text. Never wrap it in a Markdown code fence or quote block. Match its internal structure to the information density:
 
-Stage 1 output is working material: fold it into the optimized prompt. Never deliver two prompts.
+- **Simple brief:** one cohesive prose paragraph.
+- **Complex brief or image reconstruction:** an opening creation instruction followed by applicable labeled prose sections in this order: `Subject`, `Wardrobe and accessories`, `Pose and gesture`, `Environment`, `Composition and camera`, `Lighting`, `Mood and style`, and `Constraints`.
 
-## Stage 1 — Describe the image
+Section labels organize the prompt; they are not analysis or commentary. Write complete natural-language sentences within every section. Omit only inapplicable sections, not supported visual details. If the user explicitly requests variants, separate complete prompts with blank lines.
 
-Read the image first; confirm it is actually present. Then draft an objective reconstruction description, weighted by importance: lead with a one-line gist (subject + shot + style), then cover:
+Add no preface, explanation, assumptions, parameters, tag lists, weights, generator flags, or follow-up offer. Do not split image inspection and optimization into separate user-visible outputs.
 
-1. **Subject** — form and build; for people: face, eyes, hair, skin, expression; for objects/products: shape, scale cues, material, surface finish.
-2. **Clothing and accessories** — type, color, material, pattern, fit, notable details.
-3. **Pose and gesture** — stance, hand positions, head tilt, eyeline, body language.
-4. **Scene and environment** — background, surfaces, visible objects, fore/mid/background layering.
-5. **Composition and framing** — camera angle, shot type, subject placement, aspect ratio if evident, depth of field.
-6. **Lighting** — source, direction, quality (hard/soft), color temperature, shadows.
-7. **Mood and atmosphere** — grounded adjectives.
-8. **Overall style** — medium (photo, cinematic, 3D render, anime cel, flat illustration…) plus rendering cues (grain, bokeh, line weight, shading model).
+## Workflow
 
-Skip person-specific points for non-person subjects — the schema is a checklist, not a mandate.
+1. **Classify the prompt operation.** Use this skill only when the deliverable is prompt text. Explicit invocation with an image and no accompanying text means: create a standalone reconstruction prompt. Otherwise distinguish:
+   - **Standalone generation or reconstruction:** the final prompt must fully describe the target and work without access to the source image.
+   - **Reference-guided edit or composite:** the final prompt may name supplied images because the downstream generator will receive them.
+   - If the user wants an image produced or edited directly, use the image-generation workflow instead.
 
-Writing rules:
-- **Definitive, no hedging.** Drop "appears to be" / "might be". For genuinely ambiguous details, commit to the most probable reading the image supports — but never invent details it doesn't.
-- **No names.** Describe features; never identify a real person.
-- **Weight by identity.** If a detail wouldn't change whether the regeneration reads as "the same image", it is low priority.
+2. **Confirm usable inputs.** If the request depends on an image that is unavailable, ask the user to attach it. With multiple images, infer each role from the request; ask one concise question only when different role assignments would materially change the result.
 
-## Stage 2 — Optimize
+3. **Build the visual brief internally.**
+   - From text, preserve the core idea and extract the subject, action, setting, composition, visual treatment, lighting, palette, materials, exact text, requested changes, and invariants. Translate useful intent encoded in tags, weights, or flags into ordinary prose, then discard the syntax.
+   - From an image, read [references/image-analysis.md](references/image-analysis.md) completely. Inspect the image at sufficient detail and carry the full supported evidence into the optimized prompt; use salience to order details, not prune them.
+   - From text plus image, apply both sources in one pass. Explicit user instructions override conflicting reference details. Never return an image description and then offer to optimize it.
 
-1. Identify the task type: new generation, edit or variation, multi-image composite or reference-guided, text-in-image (poster, packaging, infographic, chart, diagram, UI mockup), or character/product/logo/brand consistency.
-2. Extract the brief: intended output and audience; subject, action, setting, style, mood; composition, aspect ratio, camera, lighting, color; exact text or data; reference-image roles; what must change vs. stay invariant.
-3. Ask at most two clarifying questions, only when the answer would materially change the prompt. Otherwise make conservative assumptions and state them in Notes.
-4. Rewrite in a stable order, each slot present when relevant: operation verb (create, render, edit, replace, remove, translate, localize, composite, preserve) → subject and action → setting → composition and layout → style, lighting, color, texture, camera → constraints and invariants → exact text → reference roles → output parameters. The prompt's first word is the operation verb.
+4. **Optimize without degrading fidelity.** Lead with the requested operation and defining subject. Order the remaining details by visual importance. Make composition and spatial relationships concrete, quote exact visible text, distinguish changes from preserved features, and remove verbal duplication without removing unique supported evidence. For image reconstruction, preserve category-by-category coverage even when the result is long. Resolve conflicts conservatively: explicit requirements outrank inferred details, later refinements outrank earlier rough wording, and functional constraints outrank decorative cues. When precedence remains tied, choose the least expansive interpretation that preserves the core subject and use case. Prefer positive descriptions; use brief exclusions only for a failure that would materially break the result.
 
-Rules:
-- Replace quality filler ("8k", "masterpiece", "best quality", "epic") with concrete visual description; keep detail specific but not so dense it competes with the main subject.
-- Positive framing for desired content; negatives only for known failure modes (extra text, watermarks, logos, extra fingers).
-- Photorealism → real-camera language: photorealistic, natural light, believable imperfections, material texture, grounded scale.
-- Text in image → quote the exact text, specify typography and placement, require verbatim spelling; spell unusual words letter by letter.
-- Edits → "Change only X. Preserve Y." Repeat invariants in every follow-up edit.
-- Multi-image → name each input by index and role, then how they interact.
-- Factual, educational, or data-driven visuals → require accuracy and tell the user generated labels and numbers still need human verification.
+5. **Use a focused pattern when helpful.** Read [references/prompt-patterns.md](references/prompt-patterns.md) for reconstruction, edits, composites, exact text, products, diagrams, interfaces, character consistency, or a complex new-image brief. Replace every placeholder and write natural-language prose; retain the labeled section structure for complex briefs and image reconstruction.
 
-## Reply format
+## Example
 
-The reply's first line is **Optimized prompt:** — Stage 1 analysis stays internal. Then, in order:
+Input: `dreamy rooftop garden, fashion editorial, woman in red, sunset, cinematic, portrait crop`
 
-1. A fenced ```text block containing only the prompt, pasteable as-is.
-2. **Suggested parameters:** — aspect ratio, quality settings, negative prompt, model flags, when useful.
-3. **Notes:** — assumptions made, verification warnings, offers to reformat for a specific model.
+Create a vertical high-fashion editorial portrait of a woman in a sculptural crimson gown standing in a rooftop garden at sunset.
 
-Omit Suggested parameters and Notes when the user asks for only the prompt.
+Subject: The woman stands among wildflowers and trailing vines as a light breeze moves the gown's fabric and surrounding foliage.
 
-## Adapting to the target model
+Environment: Softly glowing city rooftops recede beyond the dense garden.
 
-Default is natural-language prose (GPT Image, Gemini, Flux, SD3/SDXL, DALL·E, Imagen). Adjust when the user names a target:
+Composition and camera: Use a portrait crop, elegant subject placement, shallow depth of field, and enough environmental context to establish the rooftop setting.
 
-- **Midjourney** — compact comma-separated phrases, strongest descriptors first, flags at the end (e.g. `--ar 3:4 --style raw`).
-- **Booru-tag / anime models (NovelAI, Pony, Illustrious)** — comma-separated Danbooru-style tags ordered most → least defining.
-- **Unknown target** — give prose and offer to reformat for a specific model.
+Lighting: Warm golden light rims her silhouette through subtle atmospheric haze.
 
-## References
+Mood and style: Refined cinematic color, rich natural texture, graceful motion, and the polished restraint of a luxury fashion campaign.
 
-Load [references/prompt-patterns.md](references/prompt-patterns.md) when the task fits a reusable template: product mockups, logos, UI mockups, infographics, text rendering, localization, character consistency, image edits.
+## Quality Gate
 
-Load [references/model-notes.md](references/model-notes.md) when the user names a model family or needs parameters. Verify current official docs before relying on live API parameter names, model availability, or resolution limits.
+Before responding, confirm that the result:
 
-## Quality check
-
-- Recreation prompts would regenerate something recognizably the same image, lead with defining features, contain no hedges and no invented specifics, and name no individual.
-- Optimized prompts keep the user's intent, separate what changes from what stays invariant, and avoid contradictory directions and style stacking.
-- The fenced block is pasteable as-is, in the format matching the target model.
+- Preserves the user's intended subject, mood, use case, changes, and invariants.
+- Resolves conflicting directions instead of repeating them.
+- Front-loads the details that most strongly determine the image.
+- Grounds image-derived claims in visible evidence and omits uncertain trivia.
+- Retains every unique supported detail needed to reconstruct a complex source; optimization removes redundancy, not information.
+- Preserves required text verbatim and makes important layout relationships explicit.
+- Uses self-contained `Create`, `Render`, or `Photograph` wording for standalone reconstruction and reserves source-image wording for actual edit or composite prompts.
+- Is plain text rather than a code block, with no surrounding commentary or model-specific syntax.
