@@ -2,6 +2,8 @@
 
 The craft layer: rules with numbers, and the reasoning behind them so you can break them deliberately. Sections: Hierarchy · Typography · Spacing & Layout · Color · Depth & Ornament · Motion · Charts & Data · Per-medium notes.
 
+One tiering note before reading: the contrast floors, reduced-motion behavior, never-color-alone rule, and chart-honesty rules below are **requirements to verify**. Everything else in this file is a default to adapt or a preference to trade away when the direction — or a governing brand system — says otherwise.
+
 ## Hierarchy
 
 One focal point per view, slide, or spread. If everything is emphasized, nothing is — and the fastest fix for a busy layout is not making the primary element louder, it is making everything else quieter.

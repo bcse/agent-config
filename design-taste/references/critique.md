@@ -8,6 +8,8 @@ Run the steps in order. The ordering matters because early steps capture what re
 
 **0. Context first.** Ask or infer: purpose, audience, medium, constraints, and *stage* — concept, working draft, or final polish. Feedback must match the stage: do not kern a wireframe; do not propose restructuring a page that ships tomorrow. If the goal is unknown, say so and critique against a stated assumption.
 
+Also establish *what* you are judging. Prefer rendered output — render or screenshot when the environment allows. If only code or markup is available, say so, critique what the code determines (scale, token counts, structure), and name what still needs a visual pass. And cite only measurements you actually took: compute a contrast ratio before quoting one; otherwise write "verify contrast."
+
 **1. First impression, five seconds.** Before analyzing, record the raw read: what mood does it give, where did the eye land first, what was confusing? This is the only moment you get an honest sample of what every real viewer gets — protect it by writing it down before the analytical passes contaminate it.
 
 **2. Squint test.** Blur it. Does the intended focal point survive? Do groups still read as groups? A design that fails blurred fails at a glance, whatever its details.
