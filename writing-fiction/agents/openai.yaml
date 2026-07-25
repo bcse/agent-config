@@ -1,0 +1,4 @@
+interface:
+  display_name: "Writing Fiction"
+  short_description: "Draft and revise fiction without narrative drift"
+  default_prompt: "Use $writing-fiction to draft, continue, or revise this fiction while preserving voice, canon, genre, and narrative tension."
