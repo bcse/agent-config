@@ -1,0 +1,4 @@
+interface:
+  display_name: "Post Inline GitHub Review"
+  short_description: "Format and post supplied inline findings"
+  default_prompt: "Use $gh-post-inline-review to format these supplied findings and post them as one inline GitHub PR review."
