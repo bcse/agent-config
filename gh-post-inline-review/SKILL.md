@@ -59,6 +59,8 @@ Render the review body as:
 ### Code Review
 
 **Reviewed commit:** `0123456789`
+
+🤖 Generated with <model name>
 ```
 
 Render each inline comment as:
