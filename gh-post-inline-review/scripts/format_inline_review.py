@@ -44,11 +44,15 @@ def validate_line(value: Any, field: str) -> int:
     return value
 
 
-def review_body(commit_id: str) -> str:
+def review_body(commit_id: str, model: str) -> str:
+    # Leave the SHA bare: GitHub auto-links a 7-40 character hex SHA to its
+    # commit page, and code formatting suppresses that.
     short_sha = commit_id[:10]
     return f"""### Code Review
 
-**Reviewed commit:** `{short_sha}`"""
+**Reviewed commit:** {short_sha}
+
+🤖 Generated with {model}"""
 
 
 def finding_body(priority: str, title: str, body: str) -> str:
@@ -60,7 +64,7 @@ def finding_body(priority: str, title: str, body: str) -> str:
     )
 
 
-def load_input(path: str) -> tuple[str, list[dict[str, Any]]]:
+def load_input(path: str) -> tuple[str, str, list[dict[str, Any]]]:
     with open(path, encoding="utf-8") as handle:
         data = json.load(handle)
     if not isinstance(data, dict):
@@ -70,10 +74,14 @@ def load_input(path: str) -> tuple[str, list[dict[str, Any]]]:
     if not SHA_RE.fullmatch(commit_id):
         fail("commit_id must be a full 40-character hexadecimal SHA")
 
+    # Required rather than defaulted: several models review the same PR, and a
+    # review that silently loses its attribution cannot be traced back to one.
+    model = require_text(data.get("model"), "model")
+
     findings = data.get("findings")
     if not isinstance(findings, list):
         fail("findings must be an array")
-    return commit_id.lower(), findings
+    return commit_id.lower(), model, findings
 
 
 def build_comment(finding: Any, index: int) -> dict[str, Any]:
@@ -111,11 +119,11 @@ def main() -> int:
     args = parser.parse_args()
 
     try:
-        commit_id, findings = load_input(args.input)
+        commit_id, model, findings = load_input(args.input)
         if not findings:
             fail("at least one supplied finding is required")
         payload = {
-            "body": review_body(commit_id),
+            "body": review_body(commit_id, model),
             "commit_id": commit_id,
             "event": "COMMENT",
             "comments": [build_comment(item, i) for i, item in enumerate(findings)],

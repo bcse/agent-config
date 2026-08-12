@@ -9,7 +9,8 @@ Format and publish findings that were produced elsewhere. Do not perform a code 
 
 ## Input Contract
 
-Require each supplied finding to provide:
+Require the caller to name the reviewing model, then require each supplied
+finding to provide:
 
 - `priority`: `P0`, `P1`, `P2`, or `P3`
 - `title`: displayed after the priority badge
@@ -28,6 +29,7 @@ Create `review.json` with this shape:
 ```json
 {
   "commit_id": "40-character pull request head SHA",
+  "model": "name of the model that produced the findings",
   "findings": [
     {
       "priority": "P2",
@@ -46,6 +48,9 @@ Apply these formatting rules:
 
 - Preserve the finding array order.
 - Preserve `priority`, `title`, and `body`; trim only surrounding whitespace.
+- Supply `model` as the name of whichever model actually produced the findings,
+  resolved at run time rather than copied from an example. It is required, and
+  the script refuses to render a review without it.
 - Accept priorities `P0`, `P1`, `P2`, and `P3` for badge formatting.
 - Use a repository-relative `path` with `/` separators.
 - Use `RIGHT` for added or contextual lines and `LEFT` for deleted lines.
@@ -58,12 +63,12 @@ Render the review body as:
 ```markdown
 ### Code Review
 
-**Reviewed commit:** `0123456789`
+**Reviewed commit:** 0123456789
 
 🤖 Generated with <model name>
 ```
 
-Render each inline comment as:
+Render each inline comment as a badge and a title, with no category prefix:
 
 ```markdown
 **<sub><sub>![P2 Badge](https://img.shields.io/badge/P2-yellow?style=flat)</sub></sub>  Gate the option on the actual request route**
@@ -72,6 +77,17 @@ When ... Please ...
 ```
 
 Use badge colors `red` for P0/P1, `yellow` for P2, and `blue` for P3.
+
+Never wrap a commit SHA in backticks anywhere in the review body or a finding
+body. GitHub auto-links a bare 7-40 character hex SHA to its commit page; code
+formatting suppresses that and leaves the reader grey text to copy by hand.
+Separate consecutive SHAs with commas rather than slashes so the linkifier sees
+clean word boundaries.
+
+```markdown
+after the fixes in eae67b92, bac8a00f, and 2d26170a     <- linked
+after the fixes in `eae67b92`/`bac8a00f`/`2d26170a`     <- dead text
+```
 
 ## Format and Post
 
