@@ -1,0 +1,164 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.local/codex/skill-usage.schema.json",
+  "title": "Codex skill usage dataset",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "generated_at",
+    "period",
+    "hosts",
+    "combined"
+  ],
+  "properties": {
+    "schema_version": { "const": "1.0.0" },
+    "generated_at": { "type": "string", "format": "date-time" },
+    "period": { "$ref": "#/$defs/period" },
+    "hosts": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/host" }
+    },
+    "combined": { "$ref": "#/$defs/view" }
+  },
+  "$defs": {
+    "period": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["start_date", "end_date", "timezone"],
+      "properties": {
+        "start_date": { "type": "string", "format": "date" },
+        "end_date": { "type": "string", "format": "date" },
+        "timezone": { "type": "string", "minLength": 1 }
+      }
+    },
+    "corpus": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "log_files",
+        "log_bytes",
+        "sessions",
+        "turns",
+        "malformed_lines"
+      ],
+      "properties": {
+        "log_files": { "$ref": "#/$defs/count" },
+        "log_bytes": { "$ref": "#/$defs/count" },
+        "sessions": { "$ref": "#/$defs/count" },
+        "turns": { "$ref": "#/$defs/count" },
+        "malformed_lines": { "$ref": "#/$defs/count" }
+      }
+    },
+    "totals": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "unique_skills",
+        "activations",
+        "raw_reads",
+        "skill_using_turns"
+      ],
+      "properties": {
+        "unique_skills": { "$ref": "#/$defs/count" },
+        "activations": { "$ref": "#/$defs/count" },
+        "raw_reads": { "$ref": "#/$defs/count" },
+        "skill_using_turns": { "$ref": "#/$defs/count" }
+      }
+    },
+    "skillDay": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["date", "activations", "raw_reads", "sessions"],
+      "properties": {
+        "date": { "type": "string", "format": "date" },
+        "activations": { "$ref": "#/$defs/count" },
+        "raw_reads": { "$ref": "#/$defs/count" },
+        "sessions": { "$ref": "#/$defs/count" }
+      }
+    },
+    "skill": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "activations",
+        "raw_reads",
+        "sessions",
+        "active_days",
+        "first_date",
+        "last_date",
+        "daily"
+      ],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "activations": { "$ref": "#/$defs/count" },
+        "raw_reads": { "$ref": "#/$defs/count" },
+        "sessions": { "$ref": "#/$defs/count" },
+        "active_days": { "$ref": "#/$defs/count" },
+        "first_date": { "type": "string", "format": "date" },
+        "last_date": { "type": "string", "format": "date" },
+        "daily": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/skillDay" }
+        }
+      }
+    },
+    "day": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["date", "activations", "raw_reads", "skill_using_turns"],
+      "properties": {
+        "date": { "type": "string", "format": "date" },
+        "activations": { "$ref": "#/$defs/count" },
+        "raw_reads": { "$ref": "#/$defs/count" },
+        "skill_using_turns": { "$ref": "#/$defs/count" }
+      }
+    },
+    "view": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["corpus", "totals", "skills", "daily"],
+      "properties": {
+        "corpus": { "$ref": "#/$defs/corpus" },
+        "totals": { "$ref": "#/$defs/totals" },
+        "skills": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/skill" }
+        },
+        "daily": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/day" }
+        }
+      }
+    },
+    "host": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "hostname",
+        "timezone",
+        "corpus",
+        "totals",
+        "skills",
+        "daily"
+      ],
+      "properties": {
+        "hostname": { "type": "string", "minLength": 1 },
+        "timezone": { "type": "string", "minLength": 1 },
+        "corpus": { "$ref": "#/$defs/corpus" },
+        "totals": { "$ref": "#/$defs/totals" },
+        "skills": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/skill" }
+        },
+        "daily": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/day" }
+        }
+      }
+    },
+    "count": { "type": "integer", "minimum": 0 }
+  }
+}

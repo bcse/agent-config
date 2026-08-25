@@ -1,0 +1,4 @@
+interface:
+  display_name: "Skill Usage Report"
+  short_description: "Generate local Codex skill usage reports"
+  default_prompt: "Use $skill-usage-report to generate my skill usage report for the last six months."
