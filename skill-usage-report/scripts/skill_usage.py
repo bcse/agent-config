@@ -454,6 +454,7 @@ def render_dashboard(document: dict[str, Any]) -> str:
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="data:,">
   <title>Skill usage</title>
   <style>
     :root {
@@ -534,12 +535,16 @@ def render_dashboard(document: dict[str, Any]) -> str:
     .timeline text { fill: var(--muted); font: 11px Inter, ui-sans-serif, sans-serif; }
     .timeline .grid { stroke: #e7eaf1; stroke-width: 1; }
     .timeline .bar { fill: var(--blue); }
-    .timeline .line { fill: none; stroke: var(--teal); stroke-width: 2.2; }
-    .timeline .dot { fill: var(--teal); stroke: var(--white); stroke-width: 1.5; }
-    .legend { display: flex; justify-content: flex-end; gap: 18px; margin: -32px 0 6px; color: var(--muted); font-size: 12px; }
-    .legend span::before { content: ""; display: inline-block; width: 9px; height: 9px; margin-right: 6px; }
-    .legend .activations::before { background: var(--blue); }
-    .legend .turns::before { background: var(--teal); border-radius: 50%; }
+    .timeline .brush-mask { fill: rgba(255, 255, 255, .7); pointer-events: none; }
+    .timeline .brush-window { fill: rgba(20, 87, 217, .08); stroke: var(--blue); stroke-width: 2; cursor: grab; touch-action: none; }
+    .timeline .brush-window:active { cursor: grabbing; }
+    .timeline .brush-handle { cursor: ew-resize; touch-action: none; }
+    .timeline .brush-handle-hit { fill: transparent; }
+    .timeline .brush-handle-grip { fill: var(--white); stroke: var(--blue); stroke-width: 2; pointer-events: none; }
+    .timeline .brush-window:focus { outline: none; filter: drop-shadow(0 0 3px rgba(20, 87, 217, .55)); }
+    .timeline .brush-handle:focus { outline: none; }
+    .timeline .brush-handle:focus .brush-handle-grip { filter: drop-shadow(0 0 3px rgba(20, 87, 217, .55)); }
+    .range-help { margin: -8px 0 4px; color: var(--muted); font-size: 12px; }
     .table-tools {
       display: flex;
       align-items: end;
@@ -578,21 +583,22 @@ def render_dashboard(document: dict[str, Any]) -> str:
     footer { border-top: 1px solid var(--rule); padding-top: 13px; color: var(--muted); font-size: 12px; }
     .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
     @media (max-width: 980px) {
+      .header { align-items: stretch; flex-direction: column; }
       .charts { grid-template-columns: 1fr; }
       .metrics { grid-template-columns: repeat(2, 1fr); row-gap: 22px; }
       .metric:nth-child(3) { border-left: 0; }
     }
     @media (max-width: 620px) {
       .shell { padding: 18px 14px; }
-      .header { align-items: stretch; flex-direction: column; }
       .period { font-size: 16px; }
-      .source-control { min-width: 0; }
+      .source-control { min-width: 0; width: 100%; }
       .metrics { grid-template-columns: 1fr; gap: 18px; }
       .metric + .metric { border-left: 0; }
       .metric { padding: 0; }
       .charts { grid-template-columns: minmax(0, 1fr); gap: 28px; }
+      .timeline-wrap { min-height: 150px; }
+      .timeline { height: 150px; }
       .bar-row { grid-template-columns: minmax(96px, 135px) 1fr 38px; gap: 7px; }
-      .legend { margin: 0 0 4px; justify-content: flex-start; }
       .table-tools { align-items: stretch; flex-direction: column; }
       .search-wrap { width: 100%; }
       .table-meta { justify-content: space-between; }
@@ -618,7 +624,7 @@ def render_dashboard(document: dict[str, Any]) -> str:
       <div class="metric"><div class="metric-value" id="metric-activations">—</div><div class="metric-label">Activations</div></div>
       <div class="metric"><div class="metric-value" id="metric-skills">—</div><div class="metric-label">Skills</div></div>
       <div class="metric"><div class="metric-value" id="metric-turns">—</div><div class="metric-label">Skill-using turns</div></div>
-      <div class="metric"><div class="metric-value" id="metric-coverage">—</div><div class="metric-label">Turn coverage</div></div>
+      <div class="metric"><div class="metric-value" id="metric-reads">—</div><div class="metric-label">Raw reads</div></div>
     </section>
 
     <section class="charts" aria-label="Usage charts">
@@ -628,8 +634,8 @@ def render_dashboard(document: dict[str, Any]) -> str:
       </div>
       <div class="timeline-wrap">
         <h2 class="section-title">Daily activity</h2>
-        <div class="legend"><span class="activations">Activations</span><span class="turns">Skill-using turns</span></div>
-        <svg class="timeline" id="daily-chart" role="img" aria-label="Daily activations and skill-using turns"></svg>
+        <p class="range-help" id="range-help">Drag the window to move the range. Drag either edge to resize it.</p>
+        <svg class="timeline" id="daily-chart" role="img" aria-describedby="range-help" aria-label="Daily activations with a selected date range"></svg>
       </div>
     </section>
 
@@ -676,20 +682,74 @@ def render_dashboard(document: dict[str, Any]) -> str:
       const number = new Intl.NumberFormat();
       const shortDate = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short' });
       const fullDate = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
-      const state = { source: 'combined', query: '', sort: 'activations', direction: -1, page: 1, pageSize: 10 };
+      const state = {
+        source: 'combined', query: '', sort: 'activations', direction: -1,
+        page: 1, pageSize: 10, start: documentData.period.start_date,
+        end: documentData.period.end_date
+      };
+      let activeDrag = null;
       const els = {
         host: document.getElementById('host-filter'), search: document.getElementById('skill-search'),
         tbody: document.querySelector('#skills-table tbody'), pagination: document.getElementById('pagination'),
         range: document.getElementById('row-range'), pageSize: document.getElementById('page-size'),
-        top: document.getElementById('top-skills-chart'), daily: document.getElementById('daily-chart')
+        top: document.getElementById('top-skills-chart'), daily: document.getElementById('daily-chart'),
+        period: document.getElementById('period-label')
       };
 
       const option = (value, label) => { const item = document.createElement('option'); item.value = value; item.textContent = label; return item; };
       els.host.append(option('combined', documentData.hosts.length > 1 ? 'All machines' : 'Combined'));
       documentData.hosts.forEach((host, index) => els.host.append(option(String(index), host.hostname)));
-      document.getElementById('period-label').textContent = `${shortDate.format(new Date(documentData.period.start_date + 'T00:00:00'))} — ${fullDate.format(new Date(documentData.period.end_date + 'T00:00:00'))}`;
 
-      function view() { return state.source === 'combined' ? documentData.combined : documentData.hosts[Number(state.source)]; }
+      function sourceView() { return state.source === 'combined' ? documentData.combined : documentData.hosts[Number(state.source)]; }
+      const dayMilliseconds = 24 * 60 * 60 * 1000;
+      const periodStartTime = Date.parse(documentData.period.start_date + 'T00:00:00Z');
+      const periodDays = Math.round((Date.parse(documentData.period.end_date + 'T00:00:00Z') - periodStartTime) / dayMilliseconds) + 1;
+      function dateAt(index) { return new Date(periodStartTime + index * dayMilliseconds).toISOString().slice(0, 10); }
+      function dateIndex(value) { return Math.round((Date.parse(value + 'T00:00:00Z') - periodStartTime) / dayMilliseconds); }
+      function rangeIndices() { return [dateIndex(state.start), dateIndex(state.end)]; }
+      function setRangeIndices(start, end) {
+        const safeStart = Math.max(0, Math.min(Math.round(start), periodDays - 1));
+        const safeEnd = Math.max(safeStart, Math.min(Math.round(end), periodDays - 1));
+        state.start = dateAt(safeStart);
+        state.end = dateAt(safeEnd);
+        state.page = 1;
+      }
+      function calendarRows(source) {
+        const byDate = new Map(source.daily.map(row => [row.date, row]));
+        return Array.from({ length: periodDays }, (_, index) => byDate.get(dateAt(index)) || {
+          date: dateAt(index), activations: 0, raw_reads: 0, skill_using_turns: 0
+        });
+      }
+      function inRange(row) { return row.date >= state.start && row.date <= state.end; }
+      function sum(rows, key) { return rows.reduce((total, row) => total + row[key], 0); }
+      function view() {
+        const source = sourceView();
+        const daily = source.daily.filter(inRange);
+        const skills = source.skills.map(skill => {
+          const skillDaily = skill.daily.filter(inRange);
+          return {
+            ...skill,
+            activations: sum(skillDaily, 'activations'),
+            raw_reads: sum(skillDaily, 'raw_reads'),
+            sessions: sum(skillDaily, 'sessions'),
+            active_days: skillDaily.length,
+            first_date: skillDaily.length ? skillDaily[0].date : '',
+            last_date: skillDaily.length ? skillDaily[skillDaily.length - 1].date : '',
+            daily: skillDaily
+          };
+        }).filter(skill => skill.daily.length).sort((a, b) => b.activations - a.activations || a.name.localeCompare(b.name));
+        return {
+          ...source,
+          totals: {
+            unique_skills: skills.length,
+            activations: sum(daily, 'activations'),
+            raw_reads: sum(daily, 'raw_reads'),
+            skill_using_turns: sum(daily, 'skill_using_turns')
+          },
+          skills,
+          daily
+        };
+      }
       function svgNode(name, attributes = {}) { const node = document.createElementNS('http://www.w3.org/2000/svg', name); Object.entries(attributes).forEach(([key, value]) => node.setAttribute(key, String(value))); return node; }
       function clear(node) { while (node.firstChild) node.firstChild.remove(); }
 
@@ -697,8 +757,7 @@ def render_dashboard(document: dict[str, Any]) -> str:
         document.getElementById('metric-activations').textContent = number.format(data.totals.activations);
         document.getElementById('metric-skills').textContent = number.format(data.totals.unique_skills);
         document.getElementById('metric-turns').textContent = number.format(data.totals.skill_using_turns);
-        const coverage = data.corpus.turns ? 100 * data.totals.skill_using_turns / data.corpus.turns : 0;
-        document.getElementById('metric-coverage').textContent = `${coverage.toFixed(1)}%`;
+        document.getElementById('metric-reads').textContent = number.format(data.totals.raw_reads);
       }
 
       function renderTop(data) {
@@ -715,27 +774,110 @@ def render_dashboard(document: dict[str, Any]) -> str:
         });
       }
 
+      const chart = { width: 760, height: 286, margin: { top: 16, right: 18, bottom: 34, left: 38 } };
+      chart.plotWidth = chart.width - chart.margin.left - chart.margin.right;
+      chart.plotHeight = chart.height - chart.margin.top - chart.margin.bottom;
+
+      function pointerDay(event) {
+        const bounds = els.daily.getBoundingClientRect();
+        const svgX = (event.clientX - bounds.left) * chart.width / bounds.width;
+        return (svgX - chart.margin.left) * periodDays / chart.plotWidth;
+      }
+
+      function beginDrag(event, mode) {
+        const [start, end] = rangeIndices();
+        activeDrag = { mode, origin: pointerDay(event), start, end };
+        event.preventDefault();
+      }
+
+      function moveRange(start, end, delta) {
+        const span = end - start;
+        const nextStart = Math.max(0, Math.min(start + delta, periodDays - 1 - span));
+        setRangeIndices(nextStart, nextStart + span);
+      }
+
+      function handleBrushKey(event, mode) {
+        if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+        event.preventDefault();
+        const step = (event.shiftKey ? 7 : 1) * (event.key === 'ArrowRight' ? 1 : -1);
+        const [start, end] = rangeIndices();
+        if (mode === 'left') setRangeIndices(Math.min(end, start + step), end);
+        if (mode === 'right') setRangeIndices(start, Math.max(start, end + step));
+        if (mode === 'move') moveRange(start, end, step);
+        const focusId = mode === 'left' ? 'brush-handle-start' : mode === 'right' ? 'brush-handle-end' : 'brush-window';
+        render();
+        requestAnimationFrame(() => document.getElementById(focusId)?.focus());
+      }
+
+      function brushElement(name, attributes, mode) {
+        const node = svgNode(name, attributes);
+        node.addEventListener('pointerdown', event => beginDrag(event, mode));
+        node.addEventListener('keydown', event => handleBrushKey(event, mode));
+        return node;
+      }
+
       function renderDaily(data) {
-        clear(els.daily); const rows = data.daily; const width = 760, height = 286;
-        const margin = { top: 16, right: 18, bottom: 34, left: 38 }; const plotW = width - margin.left - margin.right, plotH = height - margin.top - margin.bottom;
+        clear(els.daily);
+        const rows = calendarRows(data);
+        const { width, height, margin, plotWidth, plotHeight } = chart;
         els.daily.setAttribute('viewBox', `0 0 ${width} ${height}`);
-        if (!rows.length) return;
-        const maxA = Math.max(1, ...rows.map(row => row.activations)); const maxT = Math.max(1, ...rows.map(row => row.skill_using_turns));
+        els.daily.setAttribute('aria-label', `Daily activations. Selected range ${state.start} to ${state.end}.`);
+        const max = Math.max(1, ...rows.map(row => row.activations));
         for (let index = 0; index <= 4; index += 1) {
-          const y = margin.top + plotH * index / 4;
+          const y = margin.top + plotHeight * index / 4;
           els.daily.append(svgNode('line', { class: 'grid', x1: margin.left, y1: y, x2: width - margin.right, y2: y }));
-          const text = svgNode('text', { x: margin.left - 7, y: y + 4, 'text-anchor': 'end' }); text.textContent = number.format(Math.round(maxA * (4 - index) / 4)); els.daily.append(text);
+          const text = svgNode('text', { x: margin.left - 7, y: y + 4, 'text-anchor': 'end' });
+          text.textContent = number.format(Math.round(max * (4 - index) / 4));
+          els.daily.append(text);
         }
-        const step = plotW / rows.length; const barW = Math.max(3, Math.min(14, step * .58)); const points = [];
+        const dayWidth = plotWidth / rows.length;
+        const barWidth = Math.max(1, Math.min(10, dayWidth * .72));
         rows.forEach((row, index) => {
-          const x = margin.left + step * index + step / 2; const barH = plotH * row.activations / maxA; const turnY = margin.top + plotH * (1 - row.skill_using_turns / maxT);
-          els.daily.append(svgNode('rect', { class: 'bar', x: x - barW / 2, y: margin.top + plotH - barH, width: barW, height: barH })); points.push(`${x},${turnY}`);
+          const x = margin.left + dayWidth * index + dayWidth / 2;
+          const barHeight = plotHeight * row.activations / max;
+          els.daily.append(svgNode('rect', {
+            class: 'bar', x: x - barWidth / 2, y: margin.top + plotHeight - barHeight,
+            width: barWidth, height: barHeight
+          }));
           if (index === 0 || index === rows.length - 1 || index % Math.ceil(rows.length / 6) === 0) {
-            const text = svgNode('text', { x, y: height - 10, 'text-anchor': 'middle' }); text.textContent = shortDate.format(new Date(row.date + 'T00:00:00')); els.daily.append(text);
+            const label = svgNode('text', { x, y: height - 10, 'text-anchor': 'middle' });
+            label.textContent = shortDate.format(new Date(row.date + 'T00:00:00'));
+            els.daily.append(label);
           }
         });
-        els.daily.append(svgNode('polyline', { class: 'line', points: points.join(' ') }));
-        points.forEach(point => { const [cx, cy] = point.split(','); els.daily.append(svgNode('circle', { class: 'dot', cx, cy, r: 3.4 })); });
+
+        const [startIndex, endIndex] = rangeIndices();
+        const left = margin.left + dayWidth * startIndex;
+        const right = margin.left + dayWidth * (endIndex + 1);
+        els.daily.append(svgNode('rect', { class: 'brush-mask', x: margin.left, y: margin.top, width: Math.max(0, left - margin.left), height: plotHeight }));
+        els.daily.append(svgNode('rect', { class: 'brush-mask', x: right, y: margin.top, width: Math.max(0, width - margin.right - right), height: plotHeight }));
+
+        const windowNode = brushElement('rect', {
+          class: 'brush-window', id: 'brush-window', x: left, y: margin.top,
+          width: Math.max(dayWidth, right - left), height: plotHeight, tabindex: 0,
+          role: 'slider', 'aria-label': 'Move selected date range',
+          'aria-valuemin': 0, 'aria-valuemax': periodDays - (endIndex - startIndex) - 1,
+          'aria-valuenow': startIndex, 'aria-valuetext': `${state.start} to ${state.end}`
+        }, 'move');
+        const startHandle = brushElement('g', {
+          class: 'brush-handle', id: 'brush-handle-start', tabindex: 0, role: 'slider',
+          'aria-label': 'Range start', 'aria-valuemin': 0, 'aria-valuemax': endIndex,
+          'aria-valuenow': startIndex, 'aria-valuetext': state.start
+        }, 'left');
+        startHandle.append(
+          svgNode('rect', { class: 'brush-handle-hit', x: left - 28, y: margin.top, width: 56, height: plotHeight }),
+          svgNode('rect', { class: 'brush-handle-grip', x: left - 5, y: margin.top, width: 10, height: plotHeight, rx: 4 })
+        );
+        const endHandle = brushElement('g', {
+          class: 'brush-handle', id: 'brush-handle-end', tabindex: 0, role: 'slider',
+          'aria-label': 'Range end', 'aria-valuemin': startIndex, 'aria-valuemax': periodDays - 1,
+          'aria-valuenow': endIndex, 'aria-valuetext': state.end
+        }, 'right');
+        endHandle.append(
+          svgNode('rect', { class: 'brush-handle-hit', x: right - 28, y: margin.top, width: 56, height: plotHeight }),
+          svgNode('rect', { class: 'brush-handle-grip', x: right - 5, y: margin.top, width: 10, height: plotHeight, rx: 4 })
+        );
+        els.daily.append(windowNode, startHandle, endHandle);
       }
 
       function sortedRows(data) {
@@ -772,7 +914,21 @@ def render_dashboard(document: dict[str, Any]) -> str:
         els.pagination.append(iconButton('Next page', 'm9 18 6-6-6-6', state.page === pages, () => { state.page += 1; render(); }));
       }
 
-      function render() { const data = view(); renderMetrics(data); renderTop(data); renderDaily(data); renderTable(data); }
+      function updatePeriod() {
+        els.period.textContent = `${shortDate.format(new Date(state.start + 'T00:00:00'))} — ${fullDate.format(new Date(state.end + 'T00:00:00'))}`;
+      }
+      function render() { const data = view(); updatePeriod(); renderMetrics(data); renderTop(data); renderDaily(sourceView()); renderTable(data); }
+      document.addEventListener('pointermove', event => {
+        if (!activeDrag) return;
+        event.preventDefault();
+        const delta = Math.round(pointerDay(event) - activeDrag.origin);
+        if (activeDrag.mode === 'left') setRangeIndices(Math.min(activeDrag.end, activeDrag.start + delta), activeDrag.end);
+        if (activeDrag.mode === 'right') setRangeIndices(activeDrag.start, Math.max(activeDrag.start, activeDrag.end + delta));
+        if (activeDrag.mode === 'move') moveRange(activeDrag.start, activeDrag.end, delta);
+        render();
+      }, { passive: false });
+      document.addEventListener('pointerup', () => { activeDrag = null; });
+      document.addEventListener('pointercancel', () => { activeDrag = null; });
       els.host.addEventListener('change', event => { state.source = event.target.value; state.page = 1; render(); });
       els.search.addEventListener('input', event => { state.query = event.target.value.trim().toLowerCase(); state.page = 1; renderTable(view()); });
       els.pageSize.addEventListener('change', event => { state.pageSize = Number(event.target.value); state.page = 1; renderTable(view()); });
