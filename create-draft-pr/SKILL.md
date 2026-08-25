@@ -10,11 +10,11 @@ Open a draft PR, then loop with Copilot's automated review until a round produce
 ```
 1. $write-pr       -> create draft PR
 2. wait            -> Copilot posts its review (~5 min, sometimes longer)
-3. read            -> collect root-level findings
+3. read            -> collect root-level inline findings; ignore suppressed ones
 4. validate        -> $receiving-code-review; verify each claim yourself
 5. fix             -> cohesive commits, one per finding or coherent group
 6. push + reply    -> reply in-thread, name the SHA
-7. goto 2          -> until a round adds no new findings
+7. goto 2          -> until a round adds no new findings; stays in draft
 ```
 
 Steps 3 and 6 are where this goes wrong in practice — the comments are not where they look like they should be, and replies land in the wrong place. Those sections are the reason this skill exists.
@@ -37,7 +37,7 @@ gh pr create --draft --base master --head "$(git branch --show-current)" \
   --title "fix(scope): Imperative summary" --body-file pr-body.md
 ```
 
-Draft on purpose: Copilot reviews drafts, so the automated rounds finish before a human is invited in.
+Draft on purpose: Copilot reviews drafts, so the automated rounds finish before a human is invited in. It stays a draft when the loop ends, too — see step 7.
 
 ## 2. Wait for the review
 
@@ -65,8 +65,10 @@ Run it with `run_in_background: true`. If the first 5 minutes are quiet, give it
 Two surfaces, both worth reading:
 
 ```bash
-# The overview Copilot posts (file table, what it reviewed, how many comments)
-gh pr view "$PR" --json reviews --jq '.reviews[] | {author: .author.login, state, body}'
+# The overview Copilot posts (file table, what it reviewed, how many comments).
+# Splitting on "<details>" drops the suppressed-comments block — see below.
+gh pr view "$PR" --json reviews \
+  --jq '.reviews[] | {author: .author.login, state, body: (.body | split("<details>")[0])}'
 
 # The actual findings
 gh api "repos/$REPO/pulls/$PR/comments" --paginate \
@@ -77,6 +79,10 @@ gh api "repos/$REPO/pulls/$PR/comments" --paginate \
 - **Do not truncate this output.** No `| head`, and skip any wrapper that caps stdout: comment bodies get cut mid-sentence and you act on half a finding. Pull one body in full with
   `gh api "repos/$REPO/pulls/comments/$ID" --jq '.body'`.
 - Record handled ids into `$SEEN` as you go, so step 2 only wakes you for genuinely new ones.
+
+**Ignore suppressed comments.** Copilot's review body often ends with a collapsed `<details><summary>Suppressed comments (N)</summary>` block, typically labelled "Previously missed — in code that hasn't changed since the last review". Those are not input to this loop. Copilot withheld them itself, they carry no comment id and so have no thread to answer in, and they target code the round did not touch — so working them turns a converging loop into an open-ended audit of the entire diff, growing the change set every round and delaying the human review the routine exists to reach. Do not fix them, do not reply to them, do not count them as findings.
+
+Only the inline comments from the `pulls/$PR/comments` endpoint drive steps 4 through 7. If a suppressed item names something you believe is a genuine defect, that is separate work: finish the loop first, then raise it on its own.
 
 Also check whether tests actually run on this PR:
 
@@ -142,22 +148,21 @@ gh pr edit "$PR" --body-file pr-body.md
 
 Copilot re-reviews on every push and surfaces different things each round, so returning to step 2 is the point of the routine, not a formality.
 
-Terminate when a round adds no new root-level comments. Distinguish that from "it has not reviewed yet" — compare the newest review against the current head:
+Terminate when a round adds no new root-level inline comments. A review whose only content is a suppressed-comments block is a clean round — end the loop. Distinguish a clean round from "it has not reviewed yet" — compare the newest review against the current head:
 
 ```bash
 gh pr view "$PR" --json headRefOid,reviews \
   --jq '{head: .headRefOid, last_review: (.reviews | last | .submittedAt)}'
 ```
 
-When the loop is done, report: rounds run, findings per round, which you accepted and which you refuted and why, the verification evidence, and whether CI ran tests. Then mark ready:
+When the loop is done, report: rounds run, findings per round, which you accepted and which you refuted and why, the verification evidence, and whether CI ran tests.
 
-```bash
-gh pr ready "$PR"
-```
+**Leave the PR in draft.** Do not run `gh pr ready`. Inviting human reviewers is the author's call — they may want another look at the diff, a live test run, or a decision on something you escalated before anyone is notified. Say the loop is clean and that the PR is ready to un-draft whenever they choose.
 
 ## Guardrails
 
 - Every fix is scoped to the finding. A review comment is not license to refactor.
+- Only inline review comments are findings. Suppressed comments are out of scope for the loop.
 - Never widen a client-facing surface to satisfy an observability request — check where an error message or payload actually travels before enriching it.
 - Keep unrelated commits off the branch for the whole loop, not just at creation.
 - Never report the loop as clean on a round you did not actually read.
