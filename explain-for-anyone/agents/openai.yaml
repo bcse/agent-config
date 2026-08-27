@@ -1,0 +1,4 @@
+interface:
+  display_name: "Explain for Anyone"
+  short_description: "Visual explainers for adult beginners"
+  default_prompt: "Use $explain-for-anyone to explain how this topic works for an adult beginner."
