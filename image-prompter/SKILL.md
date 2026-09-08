@@ -5,64 +5,49 @@ description: Create, rewrite, and optimize natural-language prompts for AI image
 
 # Image Prompter
 
-## Overview
+Turn text, images, or multiple prompts into one paste-ready image prompt. Resolve the inputs internally and describe the intended visual result directly.
 
-Turn visual intent into one paste-ready prose prompt. Treat text optimization and image-guided prompting as the same synthesis task: gather evidence internally, resolve it, and return the optimized prompt without narrating intermediate analysis.
+## Choose the operation
 
-## Critical Output Contract
+Use this skill when the deliverable is prompt text. If the user requests an image itself, use the image-generation workflow.
 
-Return only the final prompt as plain text. Never wrap it in a Markdown code fence or quote block. Match its internal structure to the information density:
+- **Prompt optimization or merging:** Write a self-contained description of the final image that works without the input prompts or conversation history. Express revisions as final attributes: "The subject wears a blue jacket." Never mention source prompts, previous versions, or the optimization process. Avoid revision instructions such as "replace," "change," "instead of," "keep the original," or "as described above." Revising prompt text does not itself imply an image-editing task.
+- **Standalone generation or reconstruction:** Describe the complete target without referring to the source image. Explicit invocation with an image and no accompanying text means standalone reconstruction.
+- **Reference-guided edit or composite:** Use this operation only when the downstream generator will receive images to modify or combine. Identify each supplied image by a clear label or role. Specify the desired edits and preserved features. Image references and edit language are appropriate here; references to earlier prompt wording are not.
 
-- **Simple brief:** one cohesive prose paragraph.
-- **Complex brief or image reconstruction:** an opening creation instruction followed by applicable labeled prose sections in this order: `Subject`, `Wardrobe and accessories`, `Pose and gesture`, `Environment`, `Composition and camera`, `Lighting`, `Mood and style`, and `Constraints`.
+If a required image is unavailable, ask the user to attach it. Infer multiple images' roles from the request; ask one concise question only when competing assignments would materially change the result.
 
-Section labels organize the prompt; they are not analysis or commentary. Write complete natural-language sentences within every section. Omit only inapplicable sections, not supported visual details. If the user explicitly requests variants, separate complete prompts with blank lines.
+## Gather and resolve the visual brief
 
-Add no preface, explanation, assumptions, parameters, tag lists, weights, generator flags, or follow-up offer. Do not split image inspection and optimization into separate user-visible outputs.
+From text, extract the subject, action, wardrobe, setting, composition, visual treatment, lighting, palette, materials, intended use, exact text, and required final attributes. Translate meaningful tags, weights, and flags into natural-language descriptions.
 
-## Workflow
+When an image supplies visual evidence, read [references/image-analysis.md](references/image-analysis.md) completely before inspection. Inspect at sufficient detail to capture distinct supported visual features. Use salience to order details, not discard them. Describe ambiguous features only as specifically as the evidence permits.
 
-1. **Classify the prompt operation.** Use this skill only when the deliverable is prompt text. Explicit invocation with an image and no accompanying text means: create a standalone reconstruction prompt. Otherwise distinguish:
-   - **Standalone generation or reconstruction:** the final prompt must fully describe the target and work without access to the source image.
-   - **Reference-guided edit or composite:** the final prompt may name supplied images because the downstream generator will receive them.
-   - If the user wants an image produced or edited directly, use the image-generation workflow instead.
+Combine compatible requirements and resolve conflicts internally. Explicit user requirements outrank inferred details; later refinements outrank earlier wording; functional constraints outrank decorative cues. For remaining ties, choose the least expansive interpretation that preserves the core subject and intended use. Retain only the resolved requirements, not superseded alternatives.
 
-2. **Confirm usable inputs.** If the request depends on an image that is unavailable, ask the user to attach it. With multiple images, infer each role from the request; ask one concise question only when different role assignments would materially change the result.
+Read [references/prompt-patterns.md](references/prompt-patterns.md) for reconstruction, edits, composites, exact text, products, diagrams, interfaces, character consistency, or complex new-image briefs. Adapt the applicable pattern to the output contract and fill every placeholder.
 
-3. **Build the visual brief internally.**
-   - From text, preserve the core idea and extract the subject, action, setting, composition, visual treatment, lighting, palette, materials, exact text, requested changes, and invariants. Translate useful intent encoded in tags, weights, or flags into ordinary prose, then discard the syntax.
-   - From an image, read [references/image-analysis.md](references/image-analysis.md) completely. Inspect the image at sufficient detail and carry the full supported evidence into the optimized prompt; use salience to order details, not prune them.
-   - From text plus image, apply both sources in one pass. Explicit user instructions override conflicting reference details. Never return an image description and then offer to optimize it.
+## Write the prompt
 
-4. **Optimize without degrading fidelity.** Lead with the requested operation and defining subject. Order the remaining details by visual importance. Make composition and spatial relationships concrete, quote exact visible text, distinguish changes from preserved features, and remove verbal duplication without removing unique supported evidence. For image reconstruction, preserve category-by-category coverage even when the result is long. Resolve conflicts conservatively: explicit requirements outrank inferred details, later refinements outrank earlier rough wording, and functional constraints outrank decorative cues. When precedence remains tied, choose the least expansive interpretation that preserves the core subject and use case. Prefer positive descriptions; use brief exclusions only for a failure that would materially break the result.
+Lead with the image operation and defining subject. For optimization, merging, and standalone generation or reconstruction, begin with Create, Render, or Photograph.
 
-5. **Use a focused pattern when helpful.** Read [references/prompt-patterns.md](references/prompt-patterns.md) for reconstruction, edits, composites, exact text, products, diagrams, interfaces, character consistency, or a complex new-image brief. Replace every placeholder and write natural-language prose; retain the labeled section structure for complex briefs and image reconstruction.
+Make placement, scale, composition, and spatial relationships concrete. Preserve required image text verbatim in quotation marks, including any words that would otherwise be inappropriate as prompt instructions.
 
-## Example
+Describe the desired appearance positively. Include brief exclusions only when they prevent a materially incorrect result. Add specificity only when supported by the inputs or necessary to express the requested result.
 
-Input: `dreamy rooftop garden, fashion editorial, woman in red, sunset, cinematic, portrait crop`
+Remove duplication while preserving unique supported information consistent with the resolved brief. For complex reconstruction, retain category-by-category visual coverage even when the prompt becomes long.
 
-Create a vertical high-fashion editorial portrait of a woman in a sculptural crimson gown standing in a rooftop garden at sunset.
+## Output contract
 
-Subject: The woman stands among wildflowers and trailing vines as a light breeze moves the gown's fabric and surrounding foliage.
+Return only the final prompt as plain text. Include no code fence, quote block, preface, explanation, assumption report, tag list, weight syntax, generator parameter, or follow-up offer. A necessary input question under the operation rules is the only exception.
 
-Environment: Softly glowing city rooftops recede beyond the dense garden.
+- **Simple brief:** Write one cohesive prose paragraph.
+- **Complex brief or image reconstruction:** Begin with an opening image instruction, followed by applicable labeled prose sections in this order: Subject, Wardrobe and accessories, Pose and gesture, Environment, Composition and camera, Lighting, Mood and style, Constraints.
 
-Composition and camera: Use a portrait crop, elegant subject placement, shallow depth of field, and enough environmental context to establish the rooftop setting.
+Use complete sentences within sections. Omit inapplicable sections without dropping relevant details. If the user explicitly requests variants, separate complete prompts with blank lines; each prompt must stand on its own.
 
-Lighting: Warm golden light rims her silhouette through subtle atmospheric haze.
+## Completion check
 
-Mood and style: Refined cinematic color, rich natural texture, graceful motion, and the polished restraint of a luxury fashion campaign.
+Verify that the prompt satisfies the resolved brief, preserves required text exactly, makes important spatial relationships explicit, and follows the output contract.
 
-## Quality Gate
-
-Before responding, confirm that the result:
-
-- Preserves the user's intended subject, mood, use case, changes, and invariants.
-- Resolves conflicting directions instead of repeating them.
-- Front-loads the details that most strongly determine the image.
-- Grounds image-derived claims in visible evidence and omits uncertain trivia.
-- Retains every unique supported detail needed to reconstruct a complex source; optimization removes redundancy, not information.
-- Preserves required text verbatim and makes important layout relationships explicit.
-- Uses self-contained `Create`, `Render`, or `Photograph` wording for standalone reconstruction and reserves source-image wording for actual edit or composite prompts.
-- Is plain text rather than a code block, with no surrounding commentary or model-specific syntax.
+For optimization, merging, and standalone reconstruction, test the prompt in isolation: a generator receiving only this text must have everything needed to depict the intended result. For reference-guided edits or composites, its only external dependencies may be the supplied images.
